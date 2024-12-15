@@ -1,6 +1,157 @@
-local SaveManager = {};
-SaveManager.Folder = "贪婪.贵宾";
-SaveManager.Ignore = {};
+function SaveManager:BuildConfigSection(tab)
+   if not tab then return end;
+   
+   local Container = Menu.Container(tab.Name or "Settings", "Configuration", "Left");
+   if not Container then return end;
+
+   Menu.TextBox(tab.Name or "Settings", "Configuration", "Config Name", "", function(value) 
+       SaveName = value;
+   end);
+
+   Menu.ComboBox(tab.Name or "Settings", "Configuration", "Config List", nil, self:RefreshConfigList(), function(config)
+       ConfigName = config;
+   end);
+
+   Menu.Button(tab.Name or "Settings", "Configuration", "Create Config", function()
+       if SaveName and SaveName:gsub(" ","") ~= "" then
+           self:Save(SaveName);
+           Menu:FindItem(tab.Name or "Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+           Notifications:New("Created config: " .. SaveName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button(tab.Name or "Settings", "Configuration", "Load Config", function()
+       if ConfigName then
+           self:Load(ConfigName);
+           Notifications:New("Loaded config: " .. ConfigName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button(tab.Name or "Settings", "Configuration", "Overwrite Config", function()
+       if ConfigName then
+           self:Save(ConfigName); 
+           Notifications:New("Overwrote config: " .. ConfigName, 5, MainColor);
+       end
+   end);
+   
+   Menu.Button(tab.Name or "Settings", "Configuration", "Delete Config", function()
+       if ConfigName then
+           delfile(self.Folder .. "/configs/" .. ConfigName .. ".json");
+           Menu:FindItem(tab.Name or "Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+           Notifications:New("Deleted config: " .. ConfigName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button(tab.Name or "Settings", "Configuration", "Refresh List", function()
+       Menu:FindItem(tab.Name or "Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+       Notifications:New("Refreshed config list", 5, MainColor);
+   end);
+
+   Menu.Button(tab.Name or "Settings", "Configuration", "Set Auto Load", function()
+       if ConfigName then
+           writefile(self.Folder .. "/autoload.txt", ConfigName);
+           Notifications:New("Set auto load: " .. ConfigName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button(tab.Name or "Settings", "Configuration", "Clear Auto Load", function()
+       if isfile(self.Folder .. "/autoload.txt") then
+           delfile(self.Folder .. "/autoload.txt");
+           Notifications:New("Cleared auto load config", 5, MainColor);
+       end
+   end);
+end;
+
+function SaveManager:RefreshConfigList()
+   self:BuildFolderTree();
+   local list = listfiles(self.Folder .. "/configs");
+
+   local out = {};
+   for i = 1, #list do
+       local file = list[i];
+       if file:sub(-5) == '.json' then
+           local pos = file:find('.json', 1, true);
+           local start = pos;
+
+           local char = file:sub(pos, pos);
+           while char ~= '/' and char ~= '\\' and char ~= '' do
+               pos = pos - 1;
+               char = file:sub(pos, pos);
+           end
+
+           if char == '/' or char == '\\' then
+               table.insert(out, file:sub(pos + 1, start - 1));
+           end
+       end
+   end
+   
+   return out;
+end;
+
+function SaveManager:BuildFolderTree()
+   local paths = {
+       self.Folder,
+       self.Folder .. "/configs"
+   };
+
+   for i = 1, #paths do
+       local str = paths[i];
+       if not isfolder(str) then
+           makefolder(str);
+       end
+   end
+end;
+
+function SaveManager:SetLibrary(library)
+   self.Library = library;
+end;
+
+function SaveManager:SetFolder(folder)
+   self.Folder = folder;
+   self:BuildFolderTree();
+end;
+
+function SaveManager:Save(name)
+   if not name then return false; end
+   
+   local config = {objects = {}};
+   
+   for idx, item in pairs(Menu.Options) do
+       if self.Parser[item.Class] then
+           table.insert(config.objects, self.Parser[item.Class].Save(idx, item));
+       end
+   end
+
+   writefile(self.Folder .. "/configs/" .. name .. ".json", game:GetService("HttpService"):JSONEncode(config));
+   
+   return true;
+end;
+
+function SaveManager:Load(name)
+   if not name then return false; end
+   
+   local file = readfile(self.Folder .. "/configs/" .. name .. ".json");
+   local data = game:GetService("HttpService"):JSONDecode(file);
+   
+   for _, obj in pairs(data.objects) do
+       if self.Parser[obj.type] then
+           self.Parser[obj.type].Load(obj.idx, obj);
+       end
+   end
+   
+   return true;
+end;
+
+function SaveManager:LoadAutoloadConfig()
+   if isfile(self.Folder .. "/autoload.txt") then
+       local name = readfile(self.Folder .. "/autoload.txt");
+       local success = self:Load(name);
+       
+       if success then
+           Notifications:New("Auto-loaded config: " .. name, 5, MainColor);
+       end
+   end
+end;
 
 SaveManager.Parser = {
    TextBox = {
@@ -58,157 +209,5 @@ SaveManager.Parser = {
        end
    }
 };
-
-function SaveManager:SetLibrary(library)
-   self.Library = library;
-end;
-
-function SaveManager:SetFolder(folder)
-   self.Folder = folder;
-   self:BuildFolderTree();
-end;
-
-function SaveManager:RefreshConfigList()
-   self:BuildFolderTree();
-   local list = listfiles(self.Folder .. "/configs");
-
-   local out = {};
-   for i = 1, #list do
-       local file = list[i];
-       if file:sub(-5) == '.json' then
-           local pos = file:find('.json', 1, true);
-           local start = pos;
-
-           local char = file:sub(pos, pos);
-           while char ~= '/' and char ~= '\\' and char ~= '' do
-               pos = pos - 1;
-               char = file:sub(pos, pos);
-           end
-
-           if char == '/' or char == '\\' then
-               table.insert(out, file:sub(pos + 1, start - 1));
-           end
-       end
-   end
-   
-   return out;
-end;
-
-function SaveManager:Save(name)
-   if not name then return false; end
-   
-   local config = {objects = {}};
-   
-   for idx, item in pairs(Menu.Options) do
-       if self.Parser[item.Class] then
-           table.insert(config.objects, self.Parser[item.Class].Save(idx, item));
-       end
-   end
-
-   writefile(self.Folder .. "/configs/" .. name .. ".json", game:GetService("HttpService"):JSONEncode(config));
-   
-   return true;
-end;
-
-function SaveManager:Load(name)
-   if not name then return false; end
-   
-   local file = readfile(self.Folder .. "/configs/" .. name .. ".json");
-   local data = game:GetService("HttpService"):JSONDecode(file);
-   
-   for _, obj in pairs(data.objects) do
-       if self.Parser[obj.type] then
-           self.Parser[obj.type].Load(obj.idx, obj);
-       end
-   end
-   
-   return true;
-end;
-
-function SaveManager:BuildFolderTree()
-   local paths = {
-       self.Folder,
-       self.Folder .. "/configs"
-   };
-
-   for i = 1, #paths do
-       local str = paths[i];
-       if not isfolder(str) then
-           makefolder(str);
-       end
-   end
-end;
-
-function SaveManager:BuildConfigSection(tab)
-   local Container = Menu.Container("Settings", "Configuration", "Left");
-
-   Menu.TextBox("Settings", "Configuration", "Config Name", "", function(value) 
-       SaveName = value;
-   end);
-
-   Menu.ComboBox("Settings", "Configuration", "Config List", nil, self:RefreshConfigList(), function(config)
-       ConfigName = config;
-   end);
-
-   Menu.Button("Settings", "Configuration", "Create Config", function()
-       if SaveName and SaveName:gsub(" ","") ~= "" then
-           self:Save(SaveName);
-           Menu:FindItem("Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
-           Notifications:New("Created config: " .. SaveName, 5, MainColor);
-       end
-   end);
-
-   Menu.Button("Settings", "Configuration", "Load Config", function()
-       if ConfigName then
-           self:Load(ConfigName);
-           Notifications:New("Loaded config: " .. ConfigName, 5, MainColor);
-       end
-   end);
-
-   Menu.Button("Settings", "Configuration", "Overwrite Config", function()
-       if ConfigName then
-           self:Save(ConfigName); 
-           Notifications:New("Overwrote config: " .. ConfigName, 5, MainColor);
-       end
-   end);
-   
-   Menu.Button("Settings", "Configuration", "Delete Config", function()
-       if ConfigName then
-           delfile(self.Folder .. "/configs/" .. ConfigName .. ".json");
-           Menu:FindItem("Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
-           Notifications:New("Deleted config: " .. ConfigName, 5, MainColor);
-       end
-   end);
-
-   Menu.Button("Settings", "Configuration", "Refresh List", function()
-       Menu:FindItem("Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
-       Notifications:New("Refreshed config list", 5, MainColor);
-   end);
-
-   Menu.Button("Settings", "Configuration", "Set Auto Load", function()
-       if ConfigName then
-           writefile(self.Folder .. "/autoload.txt", ConfigName);
-           Notifications:New("Set auto load: " .. ConfigName, 5, MainColor);
-       end
-   end);
-
-   Menu.Button("Settings", "Configuration", "Clear Auto Load", function()
-       if isfile(self.Folder .. "/autoload.txt") then
-           delfile(self.Folder .. "/autoload.txt");
-           Notifications:New("Cleared auto load config", 5, MainColor);
-       end
-   end);
-end;
-
-function SaveManager:LoadAutoloadConfig()
-   if isfile(self.Folder .. "/autoload.txt") then
-       local name = readfile(self.Folder .. "/autoload.txt");
-       local success = self:Load(name);
-       
-       if success then
-           Notifications:New("Auto-loaded config: " .. name, 5, MainColor);
-       end
-   end
-end;
 
 return SaveManager;

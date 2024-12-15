@@ -1,65 +1,85 @@
 function SaveManager:BuildConfigSection(tab)
-   if not tab then return end;
+   if not tab or not tab.Name then return end;
    
-   local Container = Menu.Container(tab.Name or "Settings", "Configuration", "Left");
+   local Container = Menu.Container(tab.Name, "Configuration", "Left");
    if not Container then return end;
 
-   Menu.TextBox(tab.Name or "Settings", "Configuration", "Config Name", "", function(value) 
+   Menu.TextBox(tab.Name, "Configuration", "Config Name", "", function(value) 
        SaveName = value;
    end);
 
-   Menu.ComboBox(tab.Name or "Settings", "Configuration", "Config List", nil, self:RefreshConfigList(), function(config)
+   Menu.ComboBox(tab.Name, "Configuration", "Config List", nil, self:RefreshConfigList(), function(config)
        ConfigName = config;
    end);
 
-   Menu.Button(tab.Name or "Settings", "Configuration", "Create Config", function()
+   Menu.Button(tab.Name, "Configuration", "Create Config", function()
        if SaveName and SaveName:gsub(" ","") ~= "" then
            self:Save(SaveName);
-           Menu:FindItem(tab.Name or "Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+           Menu:FindItem(tab.Name, "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
            Notifications:New("Created config: " .. SaveName, 5, MainColor);
        end
    end);
 
-   Menu.Button(tab.Name or "Settings", "Configuration", "Load Config", function()
+   Menu.Button(tab.Name, "Configuration", "Load Config", function()
        if ConfigName then
            self:Load(ConfigName);
            Notifications:New("Loaded config: " .. ConfigName, 5, MainColor);
        end
    end);
 
-   Menu.Button(tab.Name or "Settings", "Configuration", "Overwrite Config", function()
+   Menu.Button(tab.Name, "Configuration", "Overwrite Config", function()
        if ConfigName then
            self:Save(ConfigName); 
            Notifications:New("Overwrote config: " .. ConfigName, 5, MainColor);
        end
    end);
    
-   Menu.Button(tab.Name or "Settings", "Configuration", "Delete Config", function()
+   Menu.Button(tab.Name, "Configuration", "Delete Config", function()
        if ConfigName then
            delfile(self.Folder .. "/configs/" .. ConfigName .. ".json");
-           Menu:FindItem(tab.Name or "Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+           Menu:FindItem(tab.Name, "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
            Notifications:New("Deleted config: " .. ConfigName, 5, MainColor);
        end
    end);
 
-   Menu.Button(tab.Name or "Settings", "Configuration", "Refresh List", function()
-       Menu:FindItem(tab.Name or "Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+   Menu.Button(tab.Name, "Configuration", "Refresh List", function()
+       Menu:FindItem(tab.Name, "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
        Notifications:New("Refreshed config list", 5, MainColor);
    end);
 
-   Menu.Button(tab.Name or "Settings", "Configuration", "Set Auto Load", function()
+   Menu.Button(tab.Name, "Configuration", "Set Auto Load", function()
        if ConfigName then
            writefile(self.Folder .. "/autoload.txt", ConfigName);
            Notifications:New("Set auto load: " .. ConfigName, 5, MainColor);
        end
    end);
 
-   Menu.Button(tab.Name or "Settings", "Configuration", "Clear Auto Load", function()
+   Menu.Button(tab.Name, "Configuration", "Clear Auto Load", function()
        if isfile(self.Folder .. "/autoload.txt") then
            delfile(self.Folder .. "/autoload.txt");
            Notifications:New("Cleared auto load config", 5, MainColor);
        end
    end);
+end;
+
+function SaveManager:LoadAutoloadConfig()
+   if isfile(self.Folder .. "/autoload.txt") then
+       local name = readfile(self.Folder .. "/autoload.txt");
+       local success = self:Load(name);
+       
+       if success then
+           Notifications:New("Auto-loaded config: " .. name, 5, MainColor);
+       end
+   end
+end;
+
+function SaveManager:SetFolder(folder)
+   self.Folder = folder;
+   self:BuildFolderTree();
+end;
+
+function SaveManager:SetLibrary(library)
+   self.Library = library;
 end;
 
 function SaveManager:RefreshConfigList()
@@ -86,29 +106,6 @@ function SaveManager:RefreshConfigList()
    end
    
    return out;
-end;
-
-function SaveManager:BuildFolderTree()
-   local paths = {
-       self.Folder,
-       self.Folder .. "/configs"
-   };
-
-   for i = 1, #paths do
-       local str = paths[i];
-       if not isfolder(str) then
-           makefolder(str);
-       end
-   end
-end;
-
-function SaveManager:SetLibrary(library)
-   self.Library = library;
-end;
-
-function SaveManager:SetFolder(folder)
-   self.Folder = folder;
-   self:BuildFolderTree();
 end;
 
 function SaveManager:Save(name)
@@ -142,13 +139,16 @@ function SaveManager:Load(name)
    return true;
 end;
 
-function SaveManager:LoadAutoloadConfig()
-   if isfile(self.Folder .. "/autoload.txt") then
-       local name = readfile(self.Folder .. "/autoload.txt");
-       local success = self:Load(name);
-       
-       if success then
-           Notifications:New("Auto-loaded config: " .. name, 5, MainColor);
+function SaveManager:BuildFolderTree()
+   local paths = {
+       self.Folder,
+       self.Folder .. "/configs"
+   };
+
+   for i = 1, #paths do
+       local str = paths[i];
+       if not isfolder(str) then
+           makefolder(str);
        end
    end
 end;

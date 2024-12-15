@@ -2,8 +2,6 @@ local SaveManager = {};
 SaveManager.Folder = "贪婪.贵宾";
 SaveManager.Ignore = {};
 
-SaveManager:SetLibrary(Menu);
-
 SaveManager.Parser = {
    TextBox = {
        Save = function(idx, object)
@@ -61,6 +59,41 @@ SaveManager.Parser = {
    }
 };
 
+function SaveManager:SetLibrary(library)
+   self.Library = library;
+end;
+
+function SaveManager:SetFolder(folder)
+   self.Folder = folder;
+   self:BuildFolderTree();
+end;
+
+function SaveManager:RefreshConfigList()
+   self:BuildFolderTree();
+   local list = listfiles(self.Folder .. "/configs");
+
+   local out = {};
+   for i = 1, #list do
+       local file = list[i];
+       if file:sub(-5) == '.json' then
+           local pos = file:find('.json', 1, true);
+           local start = pos;
+
+           local char = file:sub(pos, pos);
+           while char ~= '/' and char ~= '\\' and char ~= '' do
+               pos = pos - 1;
+               char = file:sub(pos, pos);
+           end
+
+           if char == '/' or char == '\\' then
+               table.insert(out, file:sub(pos + 1, start - 1));
+           end
+       end
+   end
+   
+   return out;
+end;
+
 function SaveManager:Save(name)
    if not name then return false; end
    
@@ -92,33 +125,90 @@ function SaveManager:Load(name)
    return true;
 end;
 
+function SaveManager:BuildFolderTree()
+   local paths = {
+       self.Folder,
+       self.Folder .. "/configs"
+   };
+
+   for i = 1, #paths do
+       local str = paths[i];
+       if not isfolder(str) then
+           makefolder(str);
+       end
+   end
+end;
+
 function SaveManager:BuildConfigSection(tab)
    local Container = Menu.Container("Settings", "Configuration", "Left");
 
-   Menu.TextBox("Settings", "Configuration", "Config Name", "", function(name)
-       self:Save(name);
+   Menu.TextBox("Settings", "Configuration", "Config Name", "", function(value) 
+       SaveName = value;
    end);
 
-   Menu.Button("Settings", "Configuration", "Save Config", function()
-       Menu:Notify("Saved config successfully!", 3);
+   Menu.ComboBox("Settings", "Configuration", "Config List", nil, self:RefreshConfigList(), function(config)
+       ConfigName = config;
+   end);
+
+   Menu.Button("Settings", "Configuration", "Create Config", function()
+       if SaveName and SaveName:gsub(" ","") ~= "" then
+           self:Save(SaveName);
+           Menu:FindItem("Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+           Notifications:New("Created config: " .. SaveName, 5, MainColor);
+       end
    end);
 
    Menu.Button("Settings", "Configuration", "Load Config", function()
-       self:Load(ConfigName);
-       Menu:Notify("Loaded config successfully!", 3); 
+       if ConfigName then
+           self:Load(ConfigName);
+           Notifications:New("Loaded config: " .. ConfigName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button("Settings", "Configuration", "Overwrite Config", function()
+       if ConfigName then
+           self:Save(ConfigName); 
+           Notifications:New("Overwrote config: " .. ConfigName, 5, MainColor);
+       end
    end);
    
-   Menu.Button("Settings", "Configuration", "Reset Config", function()
-       delfile(self.Folder .. "/configs/" .. ConfigName .. ".json");
-       Menu:Notify("Reset config successfully!", 3);
+   Menu.Button("Settings", "Configuration", "Delete Config", function()
+       if ConfigName then
+           delfile(self.Folder .. "/configs/" .. ConfigName .. ".json");
+           Menu:FindItem("Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+           Notifications:New("Deleted config: " .. ConfigName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button("Settings", "Configuration", "Refresh List", function()
+       Menu:FindItem("Settings", "Configuration", "ComboBox", "Config List"):SetValue(nil, self:RefreshConfigList());
+       Notifications:New("Refreshed config list", 5, MainColor);
+   end);
+
+   Menu.Button("Settings", "Configuration", "Set Auto Load", function()
+       if ConfigName then
+           writefile(self.Folder .. "/autoload.txt", ConfigName);
+           Notifications:New("Set auto load: " .. ConfigName, 5, MainColor);
+       end
+   end);
+
+   Menu.Button("Settings", "Configuration", "Clear Auto Load", function()
+       if isfile(self.Folder .. "/autoload.txt") then
+           delfile(self.Folder .. "/autoload.txt");
+           Notifications:New("Cleared auto load config", 5, MainColor);
+       end
    end);
 end;
 
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/greedgreedgreedgreed/greed.vip/refs/heads/main/Library/SaveManager.lua"))();
-
-SaveManager:SetLibrary(Menu);
-SaveManager:SetFolder("贪婪.贵宾");
-SaveManager:BuildConfigSection(SettingsTab);
-SaveManager:LoadAutoloadConfig();
+function SaveManager:LoadAutoloadConfig()
+   if isfile(self.Folder .. "/autoload.txt") then
+       local name = readfile(self.Folder .. "/autoload.txt");
+       local success = self:Load(name);
+       
+       if success then
+           Notifications:New("Auto-loaded config: " .. name, 5, MainColor);
+       end
+   end
+end;
 
 return SaveManager;

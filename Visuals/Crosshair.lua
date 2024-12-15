@@ -37,8 +37,8 @@ local last_render = 0
 local drawings = {
     crosshair = {},
     text = {
-        Drawing.new('Text', {Size = 13, Font = 2, Outline = true, Text = 'greed', Color = Color3.new(1,1,1)}),
-        Drawing.new('Text', {Size = 13, Font = 2, Outline = true, Text = ' .vip'}),
+        Drawing.new('Text', {Size = 13, Font = 2, Outline = true, Text = '如果你不能', Color = Color3.new(1,1,1)}),
+        Drawing.new('Text', {Size = 13, Font = 2, Outline = true, Text = ' .轻敲'}),
     }
 }
 
